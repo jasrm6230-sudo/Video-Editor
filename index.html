@@ -3,101 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>محرر فيديو المتصفح</title>
+    <title>محرر فيديو بسيط</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js"></script>
 </head>
 <body>
     <header class="header">
-        <div class="logo">🎬 <span>مونتاج</span> الويب</div>
-        <div class="sep"></div>
-        <button onclick="editor.loadFiles()">📁 فتح ملفات</button>
-        <button onclick="editor.undo()">↩ تراجع</button>
-        <button onclick="editor.redo()">↪ إعادة</button>
-        <div class="sep"></div>
-        <button class="accent" onclick="editor.exportVideo()">💾 تصدير MP4</button>
-        <button onclick="editor.togglePlay()">▶ / ⏸</button>
-        <div class="spacer"></div>
-        <span class="info-badge" id="clipCount">0 مقاطع</span>
-        <span class="info-badge" id="totalDuration">00:00</span>
+        <div class="logo">🎬 <span>مونتاج</span> لايت</div>
+        <button id="btnLoad" class="accent">📁 فتح ملف فيديو</button>
+        <button id="btnPlay">▶ تشغيل</button>
+        <button id="btnSplit">✂ قص عند المؤشر</button>
+        <span class="info-badge" id="infoClips">0 مقاطع</span>
     </header>
 
     <div class="main-content">
-        <aside class="tools-panel">
-            <h3>⚙️ خصائص المقطع</h3>
-            <div class="tool-group">
-                <label>السرعة</label>
-                <input type="range" id="speedSlider" min="0.25" max="4" step="0.05" value="1" oninput="editor.setClipProp('speed', parseFloat(this.value))">
-                <span id="speedLabel">1.00x</span>
-            </div>
-            <div class="tool-group">
-                <label>الصوت</label>
-                <input type="range" id="volumeSlider" min="0" max="200" step="1" value="100" oninput="editor.setClipProp('volume', parseInt(this.value))">
-                <span id="volumeLabel">100%</span>
-            </div>
-            <div class="tool-group">
-                <label>مرشحات</label>
-                <div class="filter-preset">
-                    <button onclick="editor.applyPreset('none')">طبيعي</button>
-                    <button onclick="editor.applyPreset('warm')">دافئ</button>
-                    <button onclick="editor.applyPreset('cool')">بارد</button>
-                    <button onclick="editor.applyPreset('bw')">أبيض/أسود</button>
-                    <button onclick="editor.applyPreset('vintage')">قديم</button>
-                    <button onclick="editor.applyPreset('sharp')">حاد</button>
-                </div>
-                <div class="slider-row"><label>السطوع</label><input type="range" id="brightness" min="30" max="300" value="100" oninput="editor.setFilter('brightness', this.value)"></div>
-                <div class="slider-row"><label>التباين</label><input type="range" id="contrast" min="30" max="300" value="100" oninput="editor.setFilter('contrast', this.value)"></div>
-                <div class="slider-row"><label>التشبع</label><input type="range" id="saturate" min="0" max="300" value="100" oninput="editor.setFilter('saturate', this.value)"></div>
-            </div>
-            <div class="tool-group">
-                <label>نص</label>
-                <input type="text" id="overlayText" placeholder="اكتب نصاً..." oninput="editor.setTextProp('text', this.value)">
-                <div class="btn-row">
-                    <button onclick="editor.setTextProp('position','top')">أعلى</button>
-                    <button onclick="editor.setTextProp('position','center')">وسط</button>
-                    <button onclick="editor.setTextProp('position','bottom')">أسفل</button>
-                </div>
-                <input type="color" id="textColor" value="#ffffff" onchange="editor.setTextProp('color', this.value)">
-                <input type="range" id="textSize" min="12" max="120" value="36" oninput="editor.setTextProp('size', this.value)">
-            </div>
-            <div class="tool-group">
-                <label>أدوات</label>
-                <div class="btn-row">
-                    <button onclick="editor.splitClip()">✂ قص</button>
-                    <button onclick="editor.deleteClip()">🗑 حذف</button>
-                    <button onclick="editor.duplicateClip()">📋 تكرار</button>
-                </div>
-            </div>
-        </aside>
-
-        <div class="editor-area">
-            <div class="preview-container" id="previewContainer" ondragover="event.preventDefault()" ondrop="editor.handleDrop(event)">
-                <video id="previewVideo" muted playsinline></video>
-                <div class="text-overlay" id="textOverlayEl"></div>
-                <div class="drop-hint" id="dropHint"><span class="icon">🎥</span> اسحب وأفلت الفيديو هنا</div>
-            </div>
-            <div class="timeline-container">
-                <div class="timeline-toolbar">
-                    <button class="active-tool" data-tool="select" onclick="editor.setTool('select')">🖱 تحديد</button>
-                    <button data-tool="razor" onclick="editor.setTool('razor')">🔪 قص</button>
-                    <button onclick="editor.zoomIn()">🔍+</button>
-                    <button onclick="editor.zoomOut()">🔍-</button>
-                    <span id="zoomLevel">1.0x</span>
-                </div>
-                <div class="timeline-canvas-wrap" id="timelineWrap"><canvas id="timelineCanvas"></canvas></div>
-                <div class="time-display" id="timeDisplay">00:00:00 / 00:00:00</div>
+        <div class="preview-container" id="previewContainer">
+            <video id="previewVideo" muted playsinline></video>
+            <div class="drop-hint" id="dropHint">
+                <span>🎥</span> اضغط "فتح ملف" أو اسحب وأفلت
             </div>
         </div>
-    </div>
-
-    <div class="modal-overlay" id="exportModal">
-        <div class="modal">
-            <h3>💾 تصدير MP4</h3>
-            <p>سيتم تجهيز الفيديو داخل المتصفح. قد يستغرق وقتاً للمقاطع الكبيرة.</p>
-            <progress id="progressBar" max="100" value="0" style="display:none; width:100%;"></progress>
-            <span id="progressText"></span>
-            <button class="primary" id="exportBtn" onclick="editor.startExport()">بدء التصدير</button>
-            <button onclick="editor.closeExportModal()">إلغاء</button>
+        <div class="timeline-container">
+            <div class="timeline-toolbar">
+                <button id="btnZoomIn">🔍+</button>
+                <button id="btnZoomOut">🔍-</button>
+                <span id="zoomLevel">1.0x</span>
+            </div>
+            <div class="timeline-canvas-wrap" id="timelineWrap">
+                <canvas id="timelineCanvas"></canvas>
+            </div>
+            <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
         </div>
     </div>
 
