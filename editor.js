@@ -1,4 +1,4 @@
-// ========== Video Editor with Browser-Native FFmpeg Export ==========
+// ========== Video Editor - Full Working Version ==========
 class VideoEditor {
     constructor() {
         this.tracks = [
@@ -9,18 +9,17 @@ class VideoEditor {
         this.selectedClipId = null;
         this.playheadTime = 0;
         this.zoom = 1;
-        this.baseZoom = 60;
+        this.baseZoom = 60; // pixels per second at zoom 1
         this.totalDuration = 30;
         this.isPlaying = false;
-        this.playbackRAF = null;
         this.currentTool = 'select';
         this.dragging = null;
         this.undoStack = [];
         this.redoStack = [];
         this.clipIdCounter = 1;
-        this.loadedVideos = {};   // url -> {duration, width, height, element, file}
+        this.loadedVideos = {};  // url -> { duration, width, height, file, name }
         this.textOverlay = { text: '', position: 'bottom', color: '#ffffff', size: 36 };
-        this.ffmpeg = null;       // FFmpeg instance
+        this.ffmpeg = null;
         this.init();
     }
 
@@ -43,25 +42,30 @@ class VideoEditor {
         this.resizeCanvas();
         this.renderTimeline();
         this.updateUI();
-        // Initialize FFmpeg
+        // start FFmpeg loading
         this.initFFmpeg();
     }
 
     async initFFmpeg() {
-        const { createFFmpeg, fetchFile } = FFmpeg;  // from global script
-        this.ffmpeg = createFFmpeg({ log: true });
-        await this.ffmpeg.load();
-        console.log('FFmpeg.wasm جاهز');
+        try {
+            const { createFFmpeg } = FFmpeg;
+            this.ffmpeg = createFFmpeg({ log: false });
+            await this.ffmpeg.load();
+            console.log('FFmpeg ready');
+        } catch (e) {
+            console.warn('FFmpeg failed to load, export disabled', e);
+        }
     }
 
-    // ========== تحميل الملفات ==========
+    // ========== File Loading ==========
     loadFiles() {
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'video/*';
         input.multiple = true;
-        input.onchange = async (e) => {
-            for (const f of Array.from(e.target.files)) await this.addFile(f);
+        input.onchange = (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(f => this.addFile(f));
         };
         input.click();
     }
@@ -77,9 +81,8 @@ class VideoEditor {
                     duration: video.duration,
                     width: video.videoWidth,
                     height: video.videoHeight,
-                    element: video,
-                    name: file.name,
-                    file: file
+                    file: file,
+                    name: file.name
                 };
                 const track = this.tracks[0];
                 const start = this.findFreeSlot(track, video.duration);
@@ -97,12 +100,12 @@ class VideoEditor {
         });
     }
 
-    findFreeSlot(track, dur) {
+    findFreeSlot(track, duration) {
         if (track.clips.length === 0) return 0;
         const sorted = [...track.clips].sort((a, b) => a.timelineStart - b.timelineStart);
-        if (sorted[0].timelineStart >= dur + 0.5) return 0;
+        if (sorted[0].timelineStart >= duration + 0.5) return 0;
         for (let i = 0; i < sorted.length - 1; i++) {
-            if (sorted[i + 1].timelineStart - sorted[i].timelineEnd >= dur + 0.5)
+            if (sorted[i + 1].timelineStart - sorted[i].timelineEnd >= duration + 0.5)
                 return sorted[i].timelineEnd + 0.25;
         }
         return sorted[sorted.length - 1].timelineEnd + 0.25;
@@ -126,11 +129,18 @@ class VideoEditor {
 
     handleDrop(e) {
         e.preventDefault();
-        [...e.dataTransfer.files].filter(f => f.type.startsWith('video/')).forEach(f => this.addFile(f));
+        const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('video/'));
+        files.forEach(f => this.addFile(f));
     }
 
-    // ========== عمليات المقاطع ==========
-    getClipById(id) { for (const t of this.tracks) { const c = t.clips.find(c => c.id === id); if (c) return { clip: c, track: t }; } return null; }
+    // ========== Clip Operations ==========
+    getClipById(id) {
+        for (const t of this.tracks) {
+            const c = t.clips.find(c => c.id === id);
+            if (c) return { clip: c, track: t };
+        }
+        return null;
+    }
     get selectedClip() { return this.selectedClipId ? this.getClipById(this.selectedClipId) : null; }
     selectClip(id) { this.selectedClipId = id; this.updateTools(); this.renderTimeline(); }
 
@@ -145,7 +155,12 @@ class VideoEditor {
         clip.sourceEnd = sourceSplit; clip.timelineEnd = splitPoint;
         track.clips.push(right); this.selectClip(right.id); this.renderTimeline(); this.updateUI();
     }
-    deleteClip() { const res = this.selectedClip; if (!res) return; this.saveUndoState(); res.track.clips = res.track.clips.filter(c => c.id !== res.clip.id); this.selectedClipId = null; this.renderTimeline(); this.updateUI(); }
+    deleteClip() {
+        const res = this.selectedClip; if (!res) return;
+        this.saveUndoState();
+        res.track.clips = res.track.clips.filter(c => c.id !== res.clip.id);
+        this.selectedClipId = null; this.renderTimeline(); this.updateUI();
+    }
     duplicateClip() {
         const res = this.selectedClip; if (!res) return;
         this.saveUndoState();
@@ -187,72 +202,211 @@ class VideoEditor {
         if (this.textOverlay.text.trim()) {
             el.style.display = 'block'; el.textContent = this.textOverlay.text;
             el.style.color = this.textOverlay.color; el.style.fontSize = this.textOverlay.size + 'px';
-            el.style.top = this.textOverlay.position === 'top' ? '10%' : (this.textOverlay.position === 'center' ? '50%' : 'auto');
-            el.style.bottom = this.textOverlay.position === 'bottom' ? '10%' : 'auto';
-            el.style.transform = this.textOverlay.position === 'center' ? 'translate(-50%,-50%)' : 'translateX(-50%)';
+            const pos = this.textOverlay.position;
+            el.style.top = pos === 'top' ? '10%' : (pos === 'center' ? '50%' : 'auto');
+            el.style.bottom = pos === 'bottom' ? '10%' : 'auto';
+            el.style.transform = pos === 'center' ? 'translate(-50%,-50%)' : 'translateX(-50%)';
         } else el.style.display = 'none';
     }
 
-    // ========== أدوات ==========
-    setTool(t) { this.currentTool = t; document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active-tool', b.dataset.tool === t)); this.canvas.style.cursor = t === 'razor' ? 'crosshair' : 'default'; }
-    zoomIn() { this.zoom = Math.min(8, this.zoom * 1.3); this.resizeCanvas(); this.renderTimeline(); document.getElementById('zoomLevel').textContent = this.zoom.toFixed(1) + 'x'; }
-    zoomOut() { this.zoom = Math.max(0.15, this.zoom / 1.3); this.resizeCanvas(); this.renderTimeline(); document.getElementById('zoomLevel').textContent = this.zoom.toFixed(1) + 'x'; }
+    // ========== Tools ==========
+    setTool(t) {
+        this.currentTool = t;
+        document.querySelectorAll('[data-tool]').forEach(b => b.classList.toggle('active-tool', b.dataset.tool === t));
+        this.canvas.style.cursor = t === 'razor' ? 'crosshair' : 'default';
+    }
+    zoomIn() { this.zoom = Math.min(8, this.zoom * 1.3); this.resizeCanvas(); this.renderTimeline(); document.getElementById('zoomLevel').textContent = this.zoom.toFixed(1)+'x'; }
+    zoomOut() { this.zoom = Math.max(0.15, this.zoom / 1.3); this.resizeCanvas(); this.renderTimeline(); document.getElementById('zoomLevel').textContent = this.zoom.toFixed(1)+'x'; }
 
-    // ========== التشغيل ==========
+    // ========== Playback ==========
     togglePlay() { this.isPlaying ? this.pause() : this.play(); }
     play() {
-        if (this.isPlaying) return;
-        const c = this.findClipAtTime(this.playheadTime);
-        if (!c && !this.allClips.length) return;
-        this.isPlaying = true; this.playbackStart = performance.now() / 1000; this.playbackStartHead = this.playheadTime;
-        if (c) { this.setupPreview(c.clip, this.playheadTime); this.previewVideo.play().catch(() => { }); }
+        if (this.isPlaying || this.allClips.length === 0) return;
+        const clipInfo = this.findClipAtTime(this.playheadTime);
+        this.isPlaying = true;
+        this.playbackStart = performance.now() / 1000;
+        this.playbackStartHead = this.playheadTime;
+        if (clipInfo) { this.setupPreview(clipInfo.clip, this.playheadTime); this.previewVideo.play().catch(()=>{}); }
         this.animate();
     }
     pause() { this.isPlaying = false; if (this._raf) cancelAnimationFrame(this._raf); this.previewVideo.pause(); this.renderTimeline(); }
     animate() {
         if (!this.isPlaying) return;
-        this.playheadTime = this.playbackStartHead + (performance.now() / 1000 - this.playbackStart);
+        const now = performance.now() / 1000;
+        this.playheadTime = this.playbackStartHead + (now - this.playbackStart);
         const maxEnd = Math.max(...this.allClips.map(c => c.timelineEnd), 0);
-        if (this.playheadTime >= maxEnd) { this.playheadTime = maxEnd; this.pause(); return; }
+        if (this.playheadTime >= maxEnd) { this.playheadTime = maxEnd; this.pause(); this.renderTimeline(); this.updateUI(); return; }
         const cur = this.findClipAtTime(this.playheadTime);
         if (cur) {
-            const st = cur.clip.sourceStart + (this.playheadTime - cur.clip.timelineStart) * cur.clip.speed;
-            if (this.previewVideo.src !== cur.clip.sourceUrl || Math.abs(this.previewVideo.currentTime - st) > 0.3) {
-                this.setupPreview(cur.clip, this.playheadTime); this.previewVideo.play().catch(() => { });
+            const srcTime = cur.clip.sourceStart + (this.playheadTime - cur.clip.timelineStart) * cur.clip.speed;
+            if (this.previewVideo.src !== cur.clip.sourceUrl || Math.abs(this.previewVideo.currentTime - srcTime) > 0.3) {
+                this.setupPreview(cur.clip, this.playheadTime);
+                this.previewVideo.play().catch(()=>{});
             }
         } else {
-            const nxt = this.findNextClip(this.playheadTime);
-            if (nxt) { this.playheadTime = nxt.clip.timelineStart; this.setupPreview(nxt.clip, this.playheadTime); this.previewVideo.play().catch(() => { }); }
-            else this.pause();
+            const next = this.findNextClip(this.playheadTime);
+            if (next) { this.playheadTime = next.clip.timelineStart; this.setupPreview(next.clip, this.playheadTime); this.previewVideo.play().catch(()=>{}); }
+            else { this.pause(); }
         }
         this.renderTimeline(); this.updateUI();
         this._raf = requestAnimationFrame(() => this.animate());
     }
     setupPreview(clip, time) {
-        const st = clip.sourceStart + (time - clip.timelineStart) * clip.speed;
+        const srcTime = clip.sourceStart + (time - clip.timelineStart) * clip.speed;
         if (this.previewVideo.src !== clip.sourceUrl) this.previewVideo.src = clip.sourceUrl;
-        this.previewVideo.currentTime = st; this.previewVideo.playbackRate = clip.speed; this.previewVideo.volume = clip.volume / 100;
+        this.previewVideo.currentTime = srcTime;
+        this.previewVideo.playbackRate = clip.speed;
+        this.previewVideo.volume = clip.volume / 100;
         const f = clip.filters;
-        this.previewVideo.style.filter = `brightness(${f.brightness / 100}) contrast(${f.contrast / 100}) saturate(${f.saturate / 100}) blur(${f.blur}px) hue-rotate(${f.hue}deg) sepia(${f.sepia / 100})`;
+        this.previewVideo.style.filter = `brightness(${f.brightness/100}) contrast(${f.contrast/100}) saturate(${f.saturate/100}) blur(${f.blur}px) hue-rotate(${f.hue}deg) sepia(${f.sepia/100})`;
     }
     updatePreview() { const c = this.findClipAtTime(this.playheadTime); if (c) this.setupPreview(c.clip, this.playheadTime); }
     findClipAtTime(time) { for (const t of this.tracks) for (const c of t.clips) if (time >= c.timelineStart && time < c.timelineEnd) return { clip: c, track: t }; return null; }
     findNextClip(time) { let best = null; for (const t of this.tracks) for (const c of t.clips) if (c.timelineStart > time && (!best || c.timelineStart < best.clip.timelineStart)) best = { clip: c, track: t }; return best; }
     get allClips() { return this.tracks.flatMap(t => t.clips); }
 
-    // ========== الرسم ==========
+    // ========== Timeline Drawing ==========
     timeToPixel(t) { return t * this.baseZoom * this.zoom + 90; }
     pixelToTime(x) { return Math.max(0, (x - 90) / (this.baseZoom * this.zoom)); }
-    resizeCanvas() { const w = Math.max(this.wrap.clientWidth, 600), h = this.tracks.length * 55 + 35; this.canvas.width = w; this.canvas.height = h; this.canvas.style.width = w + 'px'; this.canvas.style.height = h + 'px'; }
-    renderTimeline() { /* كود الرسم الكامل (موجود في الإصدارات السابقة) */ }
+    resizeCanvas() {
+        const w = Math.max(this.wrap.clientWidth, 600);
+        const h = this.tracks.length * 55 + 35;
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.canvas.style.width = w + 'px';
+        this.canvas.style.height = h + 'px';
+    }
+    renderTimeline() {
+        const ctx = this.ctx, w = this.canvas.width, h = this.canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        // background
+        ctx.fillStyle = '#1a1a20'; ctx.fillRect(0, 0, w, h);
+        // ruler
+        ctx.fillStyle = '#2a2a32'; ctx.fillRect(0, 0, w, 30);
+        ctx.fillStyle = '#888'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+        for (let t = 0; t <= this.totalDuration; t += this.zoom < 0.8 ? 5 : 1) {
+            const x = this.timeToPixel(t);
+            if (x > 90 && x < w) ctx.fillText(this.formatTime(t), x, 20);
+        }
+        // tracks
+        for (let i = 0; i < this.tracks.length; i++) {
+            const y = 30 + i * 55;
+            ctx.fillStyle = i % 2 === 0 ? '#222228' : '#252530';
+            ctx.fillRect(0, y, w, 55);
+            // label
+            ctx.fillStyle = '#3a3a45'; ctx.fillRect(0, y, 88, 55);
+            ctx.fillStyle = '#aaa'; ctx.font = '11px sans-serif'; ctx.textAlign = 'right';
+            ctx.fillText(this.tracks[i].name, 82, y + 32);
+            // clips
+            for (const clip of this.tracks[i].clips) {
+                const x1 = this.timeToPixel(clip.timelineStart), x2 = this.timeToPixel(clip.timelineEnd);
+                const wc = Math.max(x2 - x1, 4);
+                ctx.fillStyle = clip.id === this.selectedClipId ? '#fff' : this.tracks[i].color;
+                ctx.fillRect(x1, y + 4, wc, 47);
+                if (wc > 30) { ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(clip.name.substring(0, 15), x1 + 4, y + 18); }
+                if (clip.speed !== 1) { ctx.fillStyle = '#000'; ctx.fillText(clip.speed + 'x', x1 + 4, y + 40); }
+            }
+        }
+        // playhead
+        const px = this.timeToPixel(this.playheadTime);
+        ctx.strokeStyle = '#ff4444'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(px, 30); ctx.lineTo(px, h); ctx.stroke();
+        this.updateTimeDisplay();
+    }
     updateTimeDisplay() {
         document.getElementById('timeDisplay').textContent = this.formatTime(this.playheadTime) + ' / ' + this.formatTime(this.totalDuration);
         document.getElementById('clipCount').textContent = this.allClips.length + ' مقاطع';
         document.getElementById('totalDuration').textContent = this.formatTime(this.totalDuration);
     }
-    formatTime(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0'); }
+    formatTime(s) { const m = Math.floor(s / 60), sec = Math.floor(s % 60); return String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0'); }
 
-    // ========== تراجع / إعادة ==========
+    // ========== Mouse Events ==========
+    getMousePos(e) {
+        const rect = this.canvas.getBoundingClientRect();
+        return { x: e.clientX - rect.left + this.wrap.scrollLeft, y: e.clientY - rect.top };
+    }
+    onMouseDown(e) {
+        if (e.button !== 0) return;
+        const pos = this.getMousePos(e);
+        // playhead drag
+        const phX = this.timeToPixel(this.playheadTime);
+        if (Math.abs(pos.x - phX) < 10 && pos.y > 30) {
+            this.dragging = { type: 'playhead' }; return;
+        }
+        // razor tool
+        if (this.currentTool === 'razor') {
+            const t = this.pixelToTime(pos.x);
+            this.playheadTime = t;
+            this.splitClip();
+            return;
+        }
+        // clip selection
+        const hit = this.hitTest(pos);
+        if (hit) {
+            this.selectClip(hit.clip.id);
+            this.dragging = { type: 'move', clipId: hit.clip.id, trackId: hit.track.id, startX: pos.x, origStart: hit.clip.timelineStart, origTrack: hit.track.id };
+            this.saveUndoState();
+            return;
+        }
+        // seek
+        this.pause();
+        this.playheadTime = this.pixelToTime(pos.x);
+        this.selectedClipId = null;
+        this.updateTools();
+        this.renderTimeline();
+    }
+    onMouseMove(e) {
+        const pos = this.getMousePos(e);
+        if (this.dragging?.type === 'playhead') {
+            this.playheadTime = Math.max(0, this.pixelToTime(pos.x));
+            this.updatePreview();
+            this.renderTimeline();
+            this.updateUI();
+            return;
+        }
+        if (this.dragging?.type === 'move') {
+            const res = this.getClipById(this.dragging.clipId);
+            if (!res) return;
+            const dx = pos.x - this.dragging.startX;
+            const dt = dx / (this.baseZoom * this.zoom);
+            const dur = res.clip.timelineEnd - res.clip.timelineStart;
+            res.clip.timelineStart = Math.max(0, this.dragging.origStart + dt);
+            res.clip.timelineEnd = res.clip.timelineStart + dur;
+            // change track
+            const newTrackId = Math.floor((pos.y - 30) / 55);
+            if (newTrackId >= 0 && newTrackId < this.tracks.length && newTrackId !== res.track.id) {
+                const oldTrack = this.tracks[this.dragging.origTrack];
+                const newTrack = this.tracks[newTrackId];
+                oldTrack.clips = oldTrack.clips.filter(c => c.id !== res.clip.id);
+                res.clip.trackId = newTrack.id;
+                newTrack.clips.push(res.clip);
+                this.dragging.trackId = newTrack.id;
+                this.dragging.origTrack = newTrack.id;
+            }
+            this.renderTimeline();
+        }
+    }
+    onMouseUp() {
+        if (this.dragging) {
+            this.dragging = null;
+            this.renderTimeline();
+            this.updateUI();
+            this.updatePreview();
+        }
+    }
+    hitTest(pos) {
+        for (let i = 0; i < this.tracks.length; i++) {
+            if (pos.y >= 30 + i * 55 && pos.y < 30 + (i + 1) * 55) {
+                for (const clip of this.tracks[i].clips) {
+                    const x1 = this.timeToPixel(clip.timelineStart), x2 = this.timeToPixel(clip.timelineEnd);
+                    if (pos.x >= x1 && pos.x <= x2) return { clip, track: this.tracks[i] };
+                }
+            }
+        }
+        return null;
+    }
+
+    // ========== Undo/Redo ==========
     saveUndoState() {
         this.undoStack.push(this.serialize());
         if (this.undoStack.length > 50) this.undoStack.shift();
@@ -300,7 +454,7 @@ class VideoEditor {
         document.getElementById('saturate').value = c ? c.filters.saturate : 100;
     }
 
-    // ========== لوحة المفاتيح ==========
+    // ========== Keyboard ==========
     onKeyDown(e) {
         if (e.ctrlKey && e.key === 'z') { e.preventDefault(); this.undo(); }
         else if (e.ctrlKey && e.key === 'y') { e.preventDefault(); this.redo(); }
@@ -309,11 +463,11 @@ class VideoEditor {
         else if (e.key === 'Delete') { e.preventDefault(); this.deleteClip(); }
         else if (e.key === 'v') this.setTool('select');
         else if (e.key === 'c') this.setTool('razor');
-        else if (e.key === 'ArrowLeft') { e.preventDefault(); this.playheadTime = Math.max(0, this.playheadTime - 1 / 30); this.updatePreview(); this.renderTimeline(); }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); this.playheadTime = Math.min(this.totalDuration, this.playheadTime + 1 / 30); this.updatePreview(); this.renderTimeline(); }
+        else if (e.key === 'ArrowLeft') { e.preventDefault(); this.playheadTime = Math.max(0, this.playheadTime - 1/30); this.updatePreview(); this.renderTimeline(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); this.playheadTime = Math.min(this.totalDuration, this.playheadTime + 1/30); this.updatePreview(); this.renderTimeline(); }
     }
 
-    // ========== التصدير باستخدام FFmpeg.wasm ==========
+    // ========== Export with FFmpeg.wasm ==========
     exportVideo() { document.getElementById('exportModal').classList.add('show'); }
     closeExportModal() { document.getElementById('exportModal').classList.remove('show'); }
 
@@ -321,25 +475,28 @@ class VideoEditor {
         const btn = document.getElementById('exportBtn');
         const prog = document.getElementById('progressBar');
         const progText = document.getElementById('progressText');
+        if (!this.ffmpeg || !this.ffmpeg.isLoaded()) {
+            progText.textContent = 'FFmpeg لم يتم تحميله بعد. انتظر...';
+            if (this.ffmpeg) await this.ffmpeg.load();
+            else return;
+        }
         btn.disabled = true;
         prog.style.display = 'block';
         prog.value = 0;
         progText.textContent = 'جاري تجهيز الملفات...';
 
-        if (!this.ffmpeg || !this.ffmpeg.isLoaded()) {
-            progText.textContent = 'FFmpeg لم يتم تحميله بعد، انتظر...';
-            await this.ffmpeg.load();
+        const allClips = this.allClips;
+        if (allClips.length === 0) {
+            progText.textContent = 'لا توجد مقاطع';
+            btn.disabled = false;
+            return;
         }
 
         try {
-            const allClips = this.allClips;
-            if (allClips.length === 0) throw new Error('لا توجد مقاطع');
-
-            // كتابة الملفات إلى نظام الملفات الافتراضي لـ FFmpeg
             const ffmpeg = this.ffmpeg;
             const fetchFile = FFmpeg.fetchFile;
             const fileNames = [];
-
+            // write input files
             for (let i = 0; i < allClips.length; i++) {
                 const clip = allClips[i];
                 const file = this.loadedVideos[clip.sourceUrl]?.file;
@@ -348,63 +505,48 @@ class VideoEditor {
                 ffmpeg.FS('writeFile', inputName, await fetchFile(file));
                 fileNames.push(inputName);
             }
-
-            // بناء filter_complex
-            let filterComplex = '';
-            const videoFilters = [];
+            // build filter complex
+            const filterParts = [];
             for (let i = 0; i < allClips.length; i++) {
                 const clip = allClips[i];
                 const f = clip.filters;
                 let vf = `[${i}:v]`;
-                vf += `setpts=${1 / clip.speed}*PTS,`;
-                vf += `eq=brightness=${f.brightness / 100}:contrast=${f.contrast / 100}:saturation=${f.saturate / 100}`;
+                vf += `setpts=${1/clip.speed}*PTS,`;
+                vf += `eq=brightness=${f.brightness/100}:contrast=${f.contrast/100}:saturation=${f.saturate/100}`;
                 if (f.hue !== 0) vf += `,hue=h=${f.hue}`;
                 if (f.sepia > 0) vf += `,colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131`;
-                vf += `,fps=30,format=yuv420p`;
-                vf += `[v${i}]`;
-                videoFilters.push(vf);
+                vf += `,fps=30,format=yuv420p[v${i}]`;
+                filterParts.push(vf);
             }
-            filterComplex += videoFilters.join(';') + ';';
-            // concat
             const concatInputs = allClips.map((_, i) => `[v${i}]`).join('');
-            filterComplex += `${concatInputs}concat=n=${allClips.length}:v=1:a=0[outv]`;
-
-            // إضافة نص
+            filterParts.push(`${concatInputs}concat=n=${allClips.length}:v=1:a=0[outv]`);
+            // text overlay
             if (this.textOverlay.text.trim()) {
                 const txt = this.textOverlay.text.replace(/[\\$']/g, '\\$&');
                 const pos = this.textOverlay.position;
-                const y = pos === 'top' ? '20' : pos === 'bottom' ? 'h-th-20' : '(h-text_h)/2';
-                filterComplex += `;[outv]drawtext=text='${txt}':fontsize=${this.textOverlay.size}:fontcolor=${this.textOverlay.color}:x=(w-text_w)/2:y=${y}[outv]`;
+                const y = pos === 'top' ? '20' : (pos === 'bottom' ? 'h-th-20' : '(h-text_h)/2');
+                filterParts.push(`[outv]drawtext=text='${txt}':fontsize=${this.textOverlay.size}:fontcolor=${this.textOverlay.color}:x=(w-text_w)/2:y=${y}[outv]`);
             }
-
-            // أمر ffmpeg
             const args = [
                 ...fileNames.flatMap(f => ['-i', f]),
-                '-filter_complex', filterComplex,
+                '-filter_complex', filterParts.join(';'),
                 '-map', '[outv]',
                 '-c:v', 'libx264',
                 '-preset', 'ultrafast',
                 '-crf', '23',
                 'output.mp4'
             ];
-
-            progText.textContent = 'جاري معالجة الفيديو (قد يستغرق دقائق)...';
             ffmpeg.setProgress(({ ratio }) => {
                 prog.value = ratio * 100;
                 progText.textContent = `المعالجة: ${Math.round(ratio * 100)}%`;
             });
-
             await ffmpeg.run(...args);
-
             const data = ffmpeg.FS('readFile', 'output.mp4');
             const blob = new Blob([data.buffer], { type: 'video/mp4' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.href = url;
-            a.download = 'montage.mp4';
-            a.click();
+            a.href = url; a.download = 'montage.mp4'; a.click();
             URL.revokeObjectURL(url);
-
             progText.textContent = '✅ تم التصدير بنجاح!';
             setTimeout(() => this.closeExportModal(), 2000);
         } catch (err) {
@@ -412,25 +554,20 @@ class VideoEditor {
             console.error(err);
         } finally {
             btn.disabled = false;
-            // تنظيف الملفات من الذاكرة
+            // cleanup virtual FS
             try {
                 const ffmpeg = this.ffmpeg;
-                ffmpeg.FS('unlink', 'output.mp4');
                 for (let i = 0; i < allClips.length; i++) ffmpeg.FS('unlink', `input_${i}.mp4`);
-            } catch (e) { }
+                ffmpeg.FS('unlink', 'output.mp4');
+            } catch (e) {}
         }
     }
-
-    // ========== أحداث الماوس (اختصار) ==========
-    onMouseDown(e) { /* ... */ }
-    onMouseMove(e) { /* ... */ }
-    onMouseUp() { /* ... */ }
 }
 
-// بدء المحرر
-const editor = new VideoEditor();
-
-// إغلاق النافذة
-document.getElementById('exportModal').addEventListener('click', function (e) {
-    if (e.target === this) editor.closeExportModal();
+// start editor when page loads
+window.addEventListener('DOMContentLoaded', () => {
+    window.editor = new VideoEditor();
+    document.getElementById('exportModal').addEventListener('click', function(e) {
+        if (e.target === this) window.editor.closeExportModal();
+    });
 });
