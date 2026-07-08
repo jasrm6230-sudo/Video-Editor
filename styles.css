@@ -9,11 +9,10 @@
     --accent: #5b8dee;
     --playhead: #ff4757;
     --radius: 8px;
-    --font: 'Segoe UI', Tahoma, sans-serif;
     direction: rtl;
 }
 * { margin:0; padding:0; box-sizing:border-box; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
+body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); height:100vh; display:flex; flex-direction:column; overflow:hidden; }
 .header { background: var(--panel); border-bottom:1px solid var(--border); padding:8px 16px; display:flex; align-items:center; gap:12px; flex-shrink:0; z-index:10; }
 .header .logo { font-weight:700; font-size:1.2em; color:var(--accent); }
 .header .logo span { color:var(--text); }
@@ -29,7 +28,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); heig
 .tool-group { background:var(--surface); border-radius:var(--radius); padding:12px; }
 .tool-group label { display:block; font-size:0.75em; color:var(--text2); margin-bottom:4px; }
 .tool-group input[type="range"] { width:100%; accent-color:var(--accent); }
-.tool-group input[type="text"], .tool-group select { width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:4px; font-family:var(--font); }
+.tool-group input[type="text"], .tool-group select { width:100%; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:4px; }
 .btn-row { display:flex; gap:6px; margin-top:6px; }
 .btn-row button { flex:1; background:var(--surface2); border:1px solid var(--border); color:var(--text); padding:5px 8px; border-radius:4px; cursor:pointer; font-size:0.75em; }
 .btn-row button:hover { background:#3f3f4e; }
