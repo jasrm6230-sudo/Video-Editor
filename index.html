@@ -5,56 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Leela Chess Zero - العب ضد المحرك</title>
 
-    <!-- مكتبات خارجية (CDN) -->
+    <!-- ===== مكتبات خارجية (CDN) ===== -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
 
-    <style>
-        /* ===== كل الـ CSS السابق نفسه ===== */
-        body {
-            background-color: #f0f0f0;
-            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 10px;
-        }
-        #title { padding: 5px 5px; font-size: 150%; font-weight: bold; font-family: 'Segoe UI', cursive, sans-serif; }
-        #gameinfo { float: left; font-size: 70%; }
-        #board { width: 400px; float: left; }
-        #movelist { padding: 10px; font-size: 80%; min-width: 200px; overflow: hidden; max-height: 200px; overflow-y: auto; background: white; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px; }
-        #analysis { padding: 10px; height: 100%; overflow: hidden; font-size: 80%; }
-        #parameters { padding: 10px; height: 100%; overflow: hidden; font-size: 80%; }
-        #variations { padding: 10px; min-width: 200px; overflow: hidden; }
-        #control { float: left; width: 100%; margin-top: 10px; }
-        #error { font-weight: bold; font-size: 100%; display: none; background-color: #D00000; color: white; float: left; width: 100%; padding: 12px 20px; margin: 8px 0; border-radius: 5px; box-sizing: border-box; }
-        #error-content { float: left; }
-        #error-cross { float: right; cursor: pointer; }
-        .buttons { float: left; font-size: 80%; font-weight: bold; margin: 4px; padding: 4px; }
-        .buttons button { padding: 4px 16px; border-radius: 6px; border: 1px solid #aaa; background-color: white; cursor: pointer; }
-        .buttons button:hover:enabled { background-color: #aaa; }
-        .buttons button:disabled { border: 1px solid #ddd; color: #888; background-color: #f8f8f8; cursor: default; }
-        #status { margin: 4px; padding: 4px; font-size: 80%; clear: both; color: #333; font-weight: bold; }
-        #output { float: left; width: 100%; background-color: #f8f8f8; margin: 5px 0; padding: 5px; color: black; font-family: 'Lucida Console', Monaco, monospace; font-size: 8pt; height: 150px; border: 1px solid #ccc; resize: vertical; display: none; }
-        #credits { font-size: 70%; float: left; width: 100%; margin-top: 10px; }
-        .tab { overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; margin-top: 10px; }
-        .tab button { background-color: inherit; font-weight: bold; font-size: 100%; float: left; border: none; outline: none; cursor: pointer; padding: 8px 10px; transition: 0.25s; }
-        .tab button:hover { background-color: #ddd; }
-        .tab button.active { background-color: #ccc; }
-        .tabcontent { display: none; padding: 6px 12px; border-top: none; background: white; border: 1px solid #ccc; border-top: none; }
-        .defaulttab { display: block; }
-        fieldset { margin: 8px 0; border: 1px solid grey; padding: 8px; border-radius: 6px; }
-        #parameters table input { margin: 5px; }
-        .applyButton { float: right; }
-        .modal { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.2); opacity: 0; visibility: hidden; transform: scale(1.1); transition: visibility 0s linear 0.15s, opacity 0.15s 0s, transform 0.15s; z-index: 1000; }
-        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 8px; width: 400px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
-        .modal-content h1,h2,h3 { text-align: center; }
-        .close-button { float: right; width: 24px; line-height: 24px; text-align: center; cursor: pointer; border-radius: 4px; background-color: lightgray; }
-        .close-button:hover { background-color: darkgray; }
-        .show-modal { opacity: 1; visibility: visible; transform: scale(1.0); transition: visibility 0s linear 0s, opacity 0.15s 0s, transform 0.15s; }
-        @media (max-width: 700px) { #board { width: 100%; float: none; } .buttons button { padding: 6px 12px; font-size: 12px; } }
-    </style>
+    <!-- ===== ربط ملف الأنماط الخارجي ===== -->
+    <link rel="stylesheet" href="engine.css">
 </head>
 <body>
 
@@ -135,9 +93,12 @@
 
     <div id="credits">محرك Leela Chess Zero · يعمل في المتصفح عبر WebAssembly</div>
 
+    <!-- ============================================================ -->
+    <!-- كل كود JavaScript (lc0_loader.js + controller.js) يبقى كما هو -->
+    <!-- ============================================================ -->
     <script>
         // ============================================================
-        // 1. lc0_loader.js (نفس الكود)
+        // 1. lc0_loader.js
         // ============================================================
         let useWebWorker = 'undefined' != typeof OffscreenCanvas;
 
@@ -237,7 +198,7 @@
         }
 
         // ============================================================
-        // 2. controller.js (معدل لحل مشكلة القطع ووضوح اللعب)
+        // 2. controller.js
         // ============================================================
         function openTab(evt, tabname) {
             $('.tabcontent').hide();
@@ -273,13 +234,11 @@
             });
 
             function Controller() {
-                // ===== الحل السحري لظهور القطع =====
-                // نحدد المسار الذي تبحث فيه المكتبة عن صور القطع على الإنترنت
                 var cfg = {
                     draggable: true,
                     showNotation: true,
                     position: 'start',
-                    assetsUrl: 'https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/', // <-- هذا هو الحل!
+                    assetsUrl: 'https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/',
                     onDragStart: this.onDragStart.bind(this),
                     onDrop: this.onDrop.bind(this),
                     onSnapEnd: this.onSnapEnd.bind(this)
@@ -330,7 +289,7 @@
                 this.createEngine();
 
                 this.mode = kModePlay;
-                this.humanSide = 'w'; // اللاعب يلعب بالأبيض افتراضياً
+                this.humanSide = 'w';
 
                 this.updateButtons();
                 this.updateStatus();
@@ -360,7 +319,7 @@
                                 urls = text.split(/\r?\n/);
                             }
                         });
-                    } catch(e) { urls = []; }
+                    } catch (e) { urls = []; }
                     if (!urls) urls = [];
                     if (urls.length === 0) {
                         urls = ['https://lczero.org/networks/network.gz'];
@@ -472,8 +431,8 @@
                     $('#stopBtn').prop('disabled', !analysisMode);
 
                     const playMode = ready && this.mode == kModePlay;
-                    const playBlack = playMode && 'w' == this.humanSide; // إذا كان الإنسان أبيض، يمكنه اختيار لعب الأسود
-                    const playWhite = playMode && 'b' == this.humanSide; // إذا كان الإنسان أسود، يمكنه اختيار لعب الأبيض
+                    const playBlack = playMode && 'w' == this.humanSide;
+                    const playWhite = playMode && 'b' == this.humanSide;
                     const resign = playMode && !this.gameResult;
                     const takeback = playMode && this.moveCount(this.humanSide) > 0;
 
@@ -528,7 +487,6 @@
                     this.state = kStateOff;
                     this.uciPendingSearch = null;
                     this.updateButtons();
-                    // رسالة ترحيب توضح كيفية اللعب
                     $('#status').text('✅ المحرك جاهز! اضغط "لعب بالأبيض" أو "لعب بالأسود" لبدء المباراة.');
                 },
 
@@ -623,12 +581,9 @@
                         case kStateOff:
                             if (message == 'uciok') {
                                 this.state = kStateReady;
-                                // بمجرد أن يصبح جاهزاً، نبدأ المباراة إذا كان المحرك هو الأسود (حسب الاختيار)
                                 if (this.mode == kModePlay && this.humanSide == 'w') {
-                                    // إذا كان الإنسان أبيض، المحرك أسود -> ينتظر دور الإنسان
                                     $('#status').text('أنت تلعب بالأبيض. قم بحركتك!');
                                 } else if (this.mode == kModePlay && this.humanSide == 'b') {
-                                    // إذا كان الإنسان أسود، المحرك أبيض -> يجب أن يبدأ المحرك
                                     this.enginePlay();
                                 }
                             }
@@ -669,7 +624,6 @@
                     this.board.orientation('white');
                     this.humanSide = 'w';
                     this.cancelSearch();
-                    // المحرك سيكون أسود، ينتظر حتى يلعب الإنسان
                     $('#status').text('أنت تلعب بالأبيض. قم بحركتك!');
                     this.updateButtons();
                 },
@@ -680,10 +634,8 @@
                     this.board.orientation('black');
                     this.humanSide = 'b';
                     this.cancelSearch();
-                    // المحرك سيكون أبيض، يجب أن يبدأ هو
                     $('#status').text('أنت تلعب بالأسود. المحرك يبدأ...');
                     this.updateButtons();
-                    // إذا كان المحرك جاهزاً، ابدأ فوراً
                     if (this.state == kStateReady) {
                         this.enginePlay();
                     }
@@ -754,7 +706,6 @@
                     if (this.game.turn() == this.humanSide) return;
                     if (this.gameResult) return;
                     if (this.state != kStateReady) {
-                        // إذا لم يكن جاهزاً، حاول مرة أخرى بعد قليل (لكن بالأساس هو جاهز)
                         setTimeout(this.enginePlay.bind(this), 500);
                         return;
                     }
