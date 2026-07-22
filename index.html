@@ -1,40 +1,895 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>محرر فيديو بسيط</title>
-    <link rel="stylesheet" href="styles.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leela Chess Zero - العب ضد المحرك</title>
+
+    <!-- مكتبات خارجية (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+
+    <style>
+        /* ===== كل الـ CSS السابق نفسه ===== */
+        body {
+            background-color: #f0f0f0;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 10px;
+        }
+        #title { padding: 5px 5px; font-size: 150%; font-weight: bold; font-family: 'Segoe UI', cursive, sans-serif; }
+        #gameinfo { float: left; font-size: 70%; }
+        #board { width: 400px; float: left; }
+        #movelist { padding: 10px; font-size: 80%; min-width: 200px; overflow: hidden; max-height: 200px; overflow-y: auto; background: white; border-radius: 5px; border: 1px solid #ddd; margin-bottom: 10px; }
+        #analysis { padding: 10px; height: 100%; overflow: hidden; font-size: 80%; }
+        #parameters { padding: 10px; height: 100%; overflow: hidden; font-size: 80%; }
+        #variations { padding: 10px; min-width: 200px; overflow: hidden; }
+        #control { float: left; width: 100%; margin-top: 10px; }
+        #error { font-weight: bold; font-size: 100%; display: none; background-color: #D00000; color: white; float: left; width: 100%; padding: 12px 20px; margin: 8px 0; border-radius: 5px; box-sizing: border-box; }
+        #error-content { float: left; }
+        #error-cross { float: right; cursor: pointer; }
+        .buttons { float: left; font-size: 80%; font-weight: bold; margin: 4px; padding: 4px; }
+        .buttons button { padding: 4px 16px; border-radius: 6px; border: 1px solid #aaa; background-color: white; cursor: pointer; }
+        .buttons button:hover:enabled { background-color: #aaa; }
+        .buttons button:disabled { border: 1px solid #ddd; color: #888; background-color: #f8f8f8; cursor: default; }
+        #status { margin: 4px; padding: 4px; font-size: 80%; clear: both; color: #333; font-weight: bold; }
+        #output { float: left; width: 100%; background-color: #f8f8f8; margin: 5px 0; padding: 5px; color: black; font-family: 'Lucida Console', Monaco, monospace; font-size: 8pt; height: 150px; border: 1px solid #ccc; resize: vertical; display: none; }
+        #credits { font-size: 70%; float: left; width: 100%; margin-top: 10px; }
+        .tab { overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; margin-top: 10px; }
+        .tab button { background-color: inherit; font-weight: bold; font-size: 100%; float: left; border: none; outline: none; cursor: pointer; padding: 8px 10px; transition: 0.25s; }
+        .tab button:hover { background-color: #ddd; }
+        .tab button.active { background-color: #ccc; }
+        .tabcontent { display: none; padding: 6px 12px; border-top: none; background: white; border: 1px solid #ccc; border-top: none; }
+        .defaulttab { display: block; }
+        fieldset { margin: 8px 0; border: 1px solid grey; padding: 8px; border-radius: 6px; }
+        #parameters table input { margin: 5px; }
+        .applyButton { float: right; }
+        .modal { position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.2); opacity: 0; visibility: hidden; transform: scale(1.1); transition: visibility 0s linear 0.15s, opacity 0.15s 0s, transform 0.15s; z-index: 1000; }
+        .modal-content { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; padding: 8px; width: 400px; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.3); }
+        .modal-content h1,h2,h3 { text-align: center; }
+        .close-button { float: right; width: 24px; line-height: 24px; text-align: center; cursor: pointer; border-radius: 4px; background-color: lightgray; }
+        .close-button:hover { background-color: darkgray; }
+        .show-modal { opacity: 1; visibility: visible; transform: scale(1.0); transition: visibility 0s linear 0s, opacity 0.15s 0s, transform 0.15s; }
+        @media (max-width: 700px) { #board { width: 100%; float: none; } .buttons button { padding: 6px 12px; font-size: 12px; } }
+    </style>
 </head>
 <body>
-    <header class="header">
-        <div class="logo">🎬 <span>مونتاج</span> لايت</div>
-        <button id="btnLoad" class="accent">📁 فتح ملف فيديو</button>
-        <button id="btnPlay">▶ تشغيل</button>
-        <button id="btnSplit">✂ قص عند المؤشر</button>
-        <span class="info-badge" id="infoClips">0 مقاطع</span>
-    </header>
 
-    <div class="main-content">
-        <div class="preview-container" id="previewContainer">
-            <video id="previewVideo" muted playsinline></video>
-            <div class="drop-hint" id="dropHint">
-                <span>🎥</span> اضغط "فتح ملف" أو اسحب وأفلت
-            </div>
-        </div>
-        <div class="timeline-container">
-            <div class="timeline-toolbar">
-                <button id="btnZoomIn">🔍+</button>
-                <button id="btnZoomOut">🔍-</button>
-                <span id="zoomLevel">1.0x</span>
-            </div>
-            <div class="timeline-canvas-wrap" id="timelineWrap">
-                <canvas id="timelineCanvas"></canvas>
-            </div>
-            <div class="time-display" id="timeDisplay">00:00 / 00:00</div>
+    <div id="title">♛ Leela Chess Zero</div>
+    <div id="gameinfo">محرك شبكات عصبية - العب ضده الآن!</div>
+    <div style="clear:both"></div>
+
+    <div id="board"></div>
+
+    <div style="float:left; min-width:200px; padding-left:10px; box-sizing:border-box;">
+        <div id="status">⏳ جارٍ تحميل المحرك...</div>
+        <div id="movelist"></div>
+    </div>
+
+    <div style="clear:both"></div>
+
+    <!-- أزرار التحكم -->
+    <div id="control">
+        <div class="buttons"><button id="startBtn">⬅ بداية</button></div>
+        <div class="buttons"><button id="flipBtn">🔄 قلب</button></div>
+        <div class="buttons"><button id="playWhiteBtn" style="background:#e8f0fe;">▶ لعب بالأبيض</button></div>
+        <div class="buttons"><button id="playBlackBtn" style="background:#e8f0fe;">▶ لعب بالأسود</button></div>
+        <div class="buttons"><button id="takebackBtn">↩ تراجع</button></div>
+        <div class="buttons"><button id="resignBtn">🏳 استسلام</button></div>
+        <div class="buttons"><button id="goBtn">▶ تحليل</button></div>
+        <div class="buttons"><button id="stopBtn">⏹ إيقاف</button></div>
+        <div class="buttons"><button id="navBegBtn">⏮</button></div>
+        <div class="buttons"><button id="navBckBtn">◀</button></div>
+        <div class="buttons"><button id="navFwdBtn">▶</button></div>
+        <div class="buttons"><button id="navEndBtn">⏭</button></div>
+        <div class="buttons"><button id="loadPgnBtn">📂 استيراد PGN</button></div>
+        <input type="file" id="pgnToLoad" accept=".pgn" style="display:none">
+    </div>
+
+    <div style="clear:both"></div>
+
+    <!-- التبويبات -->
+    <div class="tab">
+        <button class="tablinks" onclick="openTab(event, 'analysis')">تحليل</button>
+        <button class="tablinks" onclick="openTab(event, 'parameters')">إعدادات</button>
+    </div>
+
+    <div id="analysis" class="tabcontent defaulttab">
+        <div id="variations">(نتائج التحليل ستظهر هنا)</div>
+    </div>
+
+    <div id="parameters" class="tabcontent">
+        <fieldset>
+            <legend>إعدادات البحث</legend>
+            <table>
+                <tr><td><input type="radio" name="go" value="movetime" checked></td><td>الزمن لكل حركة (ميلي ثانية):</td><td><input type="number" id="gomovetime" value="5000" step="100"></td></tr>
+                <tr><td><input type="radio" name="go" value="nodes"></td><td>عدد العقد (Nodes):</td><td><input type="number" id="gonodes" value="100000" step="1000"></td></tr>
+            </table>
+            <button id="applyParams" class="applyButton">تطبيق</button>
+        </fieldset>
+        <fieldset>
+            <legend>الشبكة العصبية (الأوزان)</legend>
+            <select id="network" style="width:70%"></select>
+            <button id="applyNetwork">تحميل</button>
+        </fieldset>
+        <fieldset>
+            <legend>سجل المحرك</legend>
+            <label><input type="checkbox" id="logs"> عرض سجل الأوامر</label>
+        </fieldset>
+    </div>
+
+    <textarea id="output" readonly style="display:none;"></textarea>
+
+    <div id="error"><span id="error-content"></span><span id="error-cross">✖</span></div>
+
+    <div id="popup" class="modal">
+        <div class="modal-content">
+            <span class="close-button">✖</span>
+            <h2 id="popup-title">انتهت المباراة!</h2>
+            <h3 id="popup-sub"></h3>
         </div>
     </div>
 
-    <script src="editor.js"></script>
+    <div id="credits">محرك Leela Chess Zero · يعمل في المتصفح عبر WebAssembly</div>
+
+    <script>
+        // ============================================================
+        // 1. lc0_loader.js (نفس الكود)
+        // ============================================================
+        let useWebWorker = 'undefined' != typeof OffscreenCanvas;
+
+        if (useWebWorker) {
+            CreateLC0Worker = function() {
+                return new Promise(function(resolve, reject) {
+                    resolve(new Worker('lc0.js'));
+                });
+            };
+        } else {
+            function readFileAsText(url) {
+                return new Promise(function(resolve, reject) {
+                    console.info('loading ' + url);
+                    let req = new XMLHttpRequest();
+                    req.open('GET', url);
+                    req.onload = function() {
+                        if (req.status == 200)
+                            resolve(req.responseText);
+                        else
+                            reject(Error(req.statusText));
+                    };
+                    req.onerror = function() {
+                        reject(Error('Network Error'));
+                    };
+                    req.send();
+                });
+            }
+
+            function createWorkerScript(text) {
+                const beg = `
+        const LC0Worker = function() {
+          let worker = {
+            postMessage: function(message) {
+              if (!onmessage) return;
+              onmessage({data: message});
+            },
+            terminate: function() { /* TODO */},
+            onmessage: null,
+            onerror: null,
+          };
+          function postMessage(message) {
+            let callback=worker.onmessage;
+            if (!callback) return;
+            callback({data: message});
+          }
+          function setTerminate(callback) {
+            worker.terminate=callback;
+          }
+          `;
+                let end = `
+          return worker;
+        };
+        `;
+                let scriptText = beg + text + end;
+                return { id: 'lc0', text: scriptText };
+            }
+
+            function loadScript(params) {
+                return new Promise(function(resolve, reject) {
+                    let elementId = '__script__' + params.id;
+                    if (document.getElementById(elementId)) {
+                        resolve();
+                        return;
+                    }
+                    const head = document.getElementsByTagName('head')[0] || document.documentElement;
+                    const script = document.createElement('script');
+                    script.id = elementId;
+                    script.type = 'text/javascript';
+                    if (params.url) {
+                        script.src = params.url;
+                        script.onload = function() { resolve() };
+                        script.onerror = function() { reject('could not load ' + url); };
+                    }
+                    if (params.text) {
+                        script.text = params.text;
+                    }
+                    head.appendChild(script);
+                    if (params.text) {
+                        resolve();
+                    }
+                });
+            }
+
+            CreateLC0Worker = function() {
+                return new Promise(function(resolve, reject) {
+                    readFileAsText('lc0.js')
+                        .then(createWorkerScript)
+                        .then(loadScript)
+                        .then(function() {
+                            resolve(new LC0Worker())
+                        })
+                        .catch(function(err) {
+                            reject(err);
+                        })
+                });
+            };
+        }
+
+        // ============================================================
+        // 2. controller.js (معدل لحل مشكلة القطع ووضوح اللعب)
+        // ============================================================
+        function openTab(evt, tabname) {
+            $('.tabcontent').hide();
+            $('.tablinks').removeClass('active');
+            $('#' + tabname).show();
+            evt.currentTarget.className += ' active';
+        }
+
+        var Controller = function() {
+            const kStateOff = 0;
+            const kStateReady = 1;
+            const kStateRunning = 2;
+            const kStateCancelling = 3;
+            const kStateReplacing = 4;
+
+            const kModePlay = 0;
+            const kModeAnalysis = 1;
+
+            const kRegexBestMove = /^bestmove ([a-h][1-8])([a-h][1-8])([nbrq])?/;
+            const kRegexResult = / ([^\r\n ]+)[\r\n ]*$/;
+            const kRegexBasename = /^([^.]*)\..*$/;
+
+            const kOutcomeWhiteWon = { loser: 'b', mnemo: '1-0', text: 'فوز الأبيض' };
+            const kOutcomeBlackWon = { loser: 'w', mnemo: '0-1', text: 'فوز الأسود' };
+            const kOutcomeDraw = { mnemo: '1/2-1/2', text: 'تعادل' };
+
+            const kOutcomes = [kOutcomeWhiteWon, kOutcomeBlackWon, kOutcomeDraw];
+            const kOutcomeForLoser = {};
+            const kOutcomeForMnemo = {};
+            kOutcomes.forEach(function(outcome) {
+                if (outcome.loser) kOutcomeForLoser[outcome.loser] = outcome;
+                kOutcomeForMnemo[outcome.mnemo] = outcome;
+            });
+
+            function Controller() {
+                // ===== الحل السحري لظهور القطع =====
+                // نحدد المسار الذي تبحث فيه المكتبة عن صور القطع على الإنترنت
+                var cfg = {
+                    draggable: true,
+                    showNotation: true,
+                    position: 'start',
+                    assetsUrl: 'https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/', // <-- هذا هو الحل!
+                    onDragStart: this.onDragStart.bind(this),
+                    onDrop: this.onDrop.bind(this),
+                    onSnapEnd: this.onSnapEnd.bind(this)
+                };
+
+                $('input:radio[name="mode"]').change(this.modeChanged.bind(this));
+
+                this.board = ChessBoard('board', cfg);
+                $('#startBtn').on('click', this.startpos.bind(this));
+                $('#flipBtn').on('click', this.board.flip);
+                $('#goBtn').on('click', this.go.bind(this));
+                $('#stopBtn').on('click', this.stop.bind(this));
+                $('#error').on('click', this.hideError.bind(this));
+
+                $('#playWhiteBtn').on('click', this.playWhite.bind(this));
+                $('#playBlackBtn').on('click', this.playBlack.bind(this));
+                $('#takebackBtn').on('click', this.takeback.bind(this));
+                $('#resignBtn').on('click', this.resign.bind(this));
+
+                $('#navBegBtn').on('click', this.navigateBegin.bind(this));
+                $('#navBckBtn').on('click', this.navigateBack.bind(this));
+                $('#navFwdBtn').on('click', this.navigateForward.bind(this));
+                $('#navEndBtn').on('click', this.navigateEnd.bind(this));
+
+                $('#loadPgnBtn').on('click', function() {
+                    $('#pgnToLoad').click();
+                });
+                $('#pgnToLoad').change(this.loadPgn.bind(this));
+
+                $('#applyParams').on('click', this.applyParams.bind(this));
+                $('#logs').change(this.displayLogChanged.bind(this));
+
+                $('#popup').find('*').on('click', function() {
+                    $('#popup').removeClass('show-modal');
+                });
+
+                this.populateNetworks();
+                $('#applyNetwork').on('click', this.applyNetwork.bind(this));
+
+                this.output = document.getElementById('output');
+
+                this.game = new Chess();
+                this.moveList = [];
+                this.moveIndex = 0;
+
+                this.playGoCmd = 'go movetime 5000';
+
+                this.createEngine();
+
+                this.mode = kModePlay;
+                this.humanSide = 'w'; // اللاعب يلعب بالأبيض افتراضياً
+
+                this.updateButtons();
+                this.updateStatus();
+            }
+
+            Controller.prototype = {
+
+                startpos() {
+                    this.game.reset();
+                    this.board.start(true);
+                    this.moveList = [];
+                    this.moveIndex = 0;
+                    this.gameResult = null;
+                    if (this.mode == kModePlay) this.humanSide = 'w';
+                    this.updateButtons();
+                    this.updateStatus();
+                    $('#status').text('وضعية جديدة. اضغط "لعب بالأبيض" أو "لعب بالأسود" للبدء.');
+                },
+
+                populateNetworks() {
+                    var urls = null;
+                    try {
+                        $.ajax({
+                            url: 'networks.txt',
+                            async: false,
+                            success: function(text) {
+                                urls = text.split(/\r?\n/);
+                            }
+                        });
+                    } catch(e) { urls = []; }
+                    if (!urls) urls = [];
+                    if (urls.length === 0) {
+                        urls = ['https://lczero.org/networks/network.gz'];
+                    }
+                    for (var i = 0; i < urls.length; i++) {
+                        var url = urls[i];
+                        if (!url || url.length == 0) continue;
+                        var match = url.match(kRegexBasename);
+                        var label = match ? match[1] : url;
+                        $('#network')
+                            .append($('<option></option>').attr('value', url).text(label));
+                        if (i == 0) this.weightsUrl = url;
+                    }
+                },
+
+                modeChanged() {
+                    var selected = $('input[type=\'radio\'][name=\'mode\']:checked');
+                    var newMode = selected.val() == 'play' ? kModePlay : kModeAnalysis;
+                    if (newMode == this.mode) return;
+                    this.mode = newMode;
+                    if (this.mode == kModePlay) {
+                        this.humanSide = this.game.turn();
+                        this.cancelSearch();
+                        $('#status').text('وضع اللعب النشط. اختر لونك.');
+                    } else {
+                        this.humanSide = null;
+                        this.cancelSearch();
+                        $('#status').text('وضع التحليل النشط.');
+                    }
+                    this.updateButtons();
+                },
+
+                applyParams() {
+                    var selected = $('input[type=\'radio\'][name=\'go\']:checked');
+                    if (selected.val() == 'nodes') {
+                        var nodes = $('#gonodes').val();
+                        this.playGoCmd = 'go nodes ' + nodes;
+                    } else {
+                        var movetime = $('#gomovetime').val();
+                        this.playGoCmd = 'go movetime ' + movetime;
+                    }
+                },
+
+                applyNetwork() {
+                    this.weightsUrl = $('#network').find(':selected').val();
+                    this.createEngine();
+                },
+
+                displayLogChanged() {
+                    var choice = $('#logs').is(':checked');
+                    if (choice)
+                        $('#output').show();
+                    else
+                        $('#output').hide();
+                },
+
+                updateStatus() {
+                    var lastMove;
+                    if (this.moveIndex > 0) {
+                        var san = this.moveList[this.moveIndex - 1].san;
+                        var fullMoves = (this.moveIndex + 1) >> 1;
+                        var turn = this.game.turn();
+                        if (turn == 'w') {
+                            lastMove = 'بعد ' + fullMoves + '. ... ' + san + '.';
+                        } else {
+                            lastMove = 'بعد ' + fullMoves + '. ' + san + '.';
+                        }
+                    } else {
+                        if (this.state == kStateReady) lastMove = 'المحرك جاهز! اختر لونك وابدأ اللعب.';
+                        else lastMove = 'جاري تجهيز المحرك...';
+                    }
+                    $('#status').text(lastMove);
+
+                    var pgn = '';
+                    for (var i = 0; i < this.moveList.length; i++) {
+                        if (i % 2 == 0) {
+                            if (pgn.length > 0) pgn += ' ';
+                            pgn += (1 + (i >> 1)) + '.';
+                        }
+                        var san = this.moveList[i].san;
+                        pgn += ' ';
+                        var current = i + 1 == this.moveIndex;
+                        if (current) pgn += '<b>';
+                        pgn += san;
+                        if (current) pgn += '</b>';
+                    }
+                    if (this.gameResult) {
+                        pgn += ' ' + this.gameResult.outcome.mnemo;
+                    }
+                    $('#movelist').html(pgn);
+                },
+
+                updateButtons() {
+                    const canNav = this.mode == kModeAnalysis;
+                    const moveCount = this.moveList.length;
+                    const canNavBack = canNav && this.moveIndex > 0;
+                    const canNavForward = canNav && this.moveIndex < moveCount;
+
+                    $('#loadPgnBtn').prop('disabled', !canNav);
+                    $('#navBegBtn').prop('disabled', !canNavBack);
+                    $('#navBckBtn').prop('disabled', !canNavBack);
+                    $('#navFwdBtn').prop('disabled', !canNavForward);
+                    $('#navEndBtn').prop('disabled', !canNavForward);
+
+                    const ready = this.worker && this.state != kStateOff;
+                    const analysisMode = ready && this.mode == kModeAnalysis;
+
+                    $('#goBtn').prop('disabled', !analysisMode);
+                    $('#stopBtn').prop('disabled', !analysisMode);
+
+                    const playMode = ready && this.mode == kModePlay;
+                    const playBlack = playMode && 'w' == this.humanSide; // إذا كان الإنسان أبيض، يمكنه اختيار لعب الأسود
+                    const playWhite = playMode && 'b' == this.humanSide; // إذا كان الإنسان أسود، يمكنه اختيار لعب الأبيض
+                    const resign = playMode && !this.gameResult;
+                    const takeback = playMode && this.moveCount(this.humanSide) > 0;
+
+                    $('#playBlackBtn').prop('disabled', !playBlack);
+                    $('#playWhiteBtn').prop('disabled', !playWhite);
+                    $('#takebackBtn').prop('disabled', !takeback);
+                    $('#resignBtn').prop('disabled', !resign);
+                },
+
+                getCurrentSetup() {
+                    var setup = 'position startpos';
+                    var history = this.game.history({ verbose: true });
+                    if (history.length > 0) {
+                        setup += ' moves';
+                        for (var i = 0; i < history.length; i++) {
+                            var move = history[i];
+                            var coord_move = move.from + move.to;
+                            if (move.promotion) coord_move += move.promotion;
+                            setup += ' ' + coord_move;
+                        }
+                    }
+                    return setup;
+                },
+
+                go() {
+                    this.requestSearch({ 'setup': this.getCurrentSetup(), 'go': 'go infinite' });
+                    this.updateButtons();
+                },
+
+                stop() {
+                    this.cancelSearch();
+                    this.updateButtons();
+                },
+
+                createEngine() {
+                    if (this.worker) {
+                        this.worker.terminate();
+                        this.worker = null;
+                    }
+                    $('#status').text('⏳ جاري تحميل المحرك و الشبكة العصبية... هذا قد يستغرق دقائق.');
+                    CreateLC0Worker()
+                        .then(this.initEngine.bind(this))
+                        .catch(this.showError.bind(this));
+                    this.updateButtons();
+                },
+
+                initEngine(worker) {
+                    this.worker = worker;
+                    this.worker.onmessage = this.receive.bind(this);
+                    this.worker.onerror = this.engineError.bind(this);
+                    this.worker.postMessage('load ' + this.weightsUrl);
+                    this.state = kStateOff;
+                    this.uciPendingSearch = null;
+                    this.updateButtons();
+                    // رسالة ترحيب توضح كيفية اللعب
+                    $('#status').text('✅ المحرك جاهز! اضغط "لعب بالأبيض" أو "لعب بالأسود" لبدء المباراة.');
+                },
+
+                send(message) {
+                    this.worker.postMessage(message);
+                    this.output.value += 'send: ' + message + '\n';
+                    this.output.scrollTop = this.output.scrollHeight;
+                },
+
+                searchResponse(move) {
+                    if (this.mode != kModePlay) return;
+                    move = this.makeMove(move);
+                    if (move == null) return;
+                    switch (move.flag) {
+                        case 'n':
+                        case 'b':
+                        case 'c':
+                            this.board.move(move.from + '-' + move.to);
+                            break;
+                        default:
+                            this.board.position(this.game.fen());
+                            break;
+                    }
+                    if (this.gameResult) {
+                        this.displayGameResult();
+                    } else {
+                        this.enginePlay();
+                    }
+                },
+
+                requestSearch(search) {
+                    switch (this.state) {
+                        case kStateOff:
+                            break;
+                        case kStateReady: {
+                            this.state = kStateRunning;
+                            this.send(search.setup);
+                            this.send(search.go);
+                            break;
+                        }
+                        case kStateRunning: {
+                            this.state = kStateReplacing;
+                            this.uciPendingSearch = search;
+                            this.send('stop');
+                            break;
+                        }
+                        case kStateCancelling: {
+                            this.state = kStateReplacing;
+                            this.uciPendingSearch = search;
+                            break;
+                        }
+                        case kStateReplacing: {
+                            this.uciPendingSearch = search;
+                            break;
+                        }
+                    }
+                },
+
+                cancelSearch(search) {
+                    switch (this.state) {
+                        case kStateOff:
+                        case kStateReady:
+                        case kStateCancelling:
+                            break;
+                        case kStateRunning: {
+                            this.state = kStateCancelling;
+                            this.send('stop');
+                            break;
+                        }
+                        case kStateReplacing: {
+                            this.state = kStateCancelling;
+                            this.uciPendingSearch = null;
+                            break;
+                        }
+                    }
+                },
+
+                receive(e) {
+                    const message = e.data;
+                    if (Array.isArray(message)) {
+                        this.output.value += message[1] + ': ' + message[0] + '\n';
+                    } else {
+                        this.interpret(message);
+                        this.output.value += message + '\n';
+                    }
+                    this.output.scrollTop = this.output.scrollHeight;
+                },
+
+                interpret(message) {
+                    const oldState = this.state;
+                    switch (this.state) {
+                        case kStateOff:
+                            if (message == 'uciok') {
+                                this.state = kStateReady;
+                                // بمجرد أن يصبح جاهزاً، نبدأ المباراة إذا كان المحرك هو الأسود (حسب الاختيار)
+                                if (this.mode == kModePlay && this.humanSide == 'w') {
+                                    // إذا كان الإنسان أبيض، المحرك أسود -> ينتظر دور الإنسان
+                                    $('#status').text('أنت تلعب بالأبيض. قم بحركتك!');
+                                } else if (this.mode == kModePlay && this.humanSide == 'b') {
+                                    // إذا كان الإنسان أسود، المحرك أبيض -> يجب أن يبدأ المحرك
+                                    this.enginePlay();
+                                }
+                            }
+                            break;
+                        case kStateReady:
+                            break;
+                        case kStateRunning: {
+                            var match = message.match(kRegexBestMove);
+                            if (match) {
+                                var move = { from: match[1], to: match[2], promotion: match[3] };
+                                this.state = kStateReady;
+                                this.searchResponse(move);
+                            }
+                            break;
+                        }
+                        case kStateCancelling: {
+                            var match = message.match(kRegexBestMove);
+                            if (match) this.state = kStateReady;
+                            break;
+                        }
+                        case kStateReplacing: {
+                            var match = message.match(kRegexBestMove);
+                            if (match) {
+                                this.send(this.uciPendingSearch.setup);
+                                this.send(this.uciPendingSearch.go);
+                                this.uciPendingSearch = null;
+                                this.state = kStateRunning;
+                            }
+                            break;
+                        }
+                    }
+                    if (this.state != oldState) this.updateButtons();
+                },
+
+                playWhite() {
+                    if (this.mode != kModePlay) return;
+                    if (this.humanSide == 'w') return;
+                    this.board.orientation('white');
+                    this.humanSide = 'w';
+                    this.cancelSearch();
+                    // المحرك سيكون أسود، ينتظر حتى يلعب الإنسان
+                    $('#status').text('أنت تلعب بالأبيض. قم بحركتك!');
+                    this.updateButtons();
+                },
+
+                playBlack() {
+                    if (this.mode != kModePlay) return;
+                    if (this.humanSide == 'b') return;
+                    this.board.orientation('black');
+                    this.humanSide = 'b';
+                    this.cancelSearch();
+                    // المحرك سيكون أبيض، يجب أن يبدأ هو
+                    $('#status').text('أنت تلعب بالأسود. المحرك يبدأ...');
+                    this.updateButtons();
+                    // إذا كان المحرك جاهزاً، ابدأ فوراً
+                    if (this.state == kStateReady) {
+                        this.enginePlay();
+                    }
+                },
+
+                takeback() {
+                    if (this.mode != kModePlay) return;
+                    this.cancelSearch();
+                    while (this.moveIndex > 0) {
+                        var move = this.moveList[--this.moveIndex];
+                        this.game.undo();
+                        if (move.color == this.humanSide) break;
+                    }
+                    this.board.position(this.game.fen());
+                    this.updateButtons();
+                    this.updateStatus();
+                },
+
+                moveCount(color) {
+                    var count = this.moveIndex;
+                    if ('w' == color) count++;
+                    return count >> 1;
+                },
+
+                resign() {
+                    if (this.mode != kModePlay) return;
+                    if (this.gameResult) return;
+                    this.cancelSearch();
+                    this.moveList.splice(this.moveIndex);
+                    const outcome = kOutcomeForLoser[this.humanSide];
+                    const loser = this.humanSide == 'w' ? 'الأبيض' : 'الأسود';
+                    this.gameResult = { outcome: outcome, reason: loser + ' استسلم' };
+                    this.displayGameResult();
+                    this.updateStatus();
+                    this.updateButtons();
+                },
+
+                displayGameResult() {
+                    if (!this.gameResult) return;
+                    $('#popup-title').text(this.gameResult.reason + '!');
+                    $('#popup-sub').text(this.gameResult.outcome.text + '.');
+                    $('#popup').addClass('show-modal');
+                },
+
+                onDragStart(source, piece, position, orientation) {
+                    if (this.mode == kModeAnalysis) return true;
+                    if (this.game.turn() != this.humanSide) return false;
+                    return true;
+                },
+
+                onDrop(source, target) {
+                    if (this.mode == kModePlay && this.state != kStateReady)
+                        return 'snapback';
+                    var move = { from: source, to: target, promotion: 'q' };
+                    move = this.makeMove(move);
+                    if (move === null) return 'snapback';
+                    if (this.mode == kModePlay) {
+                        if (this.gameResult) {
+                            this.displayGameResult();
+                        } else {
+                            this.enginePlay();
+                        }
+                    }
+                },
+
+                enginePlay() {
+                    if (this.mode != kModePlay) return;
+                    if (this.game.turn() == this.humanSide) return;
+                    if (this.gameResult) return;
+                    if (this.state != kStateReady) {
+                        // إذا لم يكن جاهزاً، حاول مرة أخرى بعد قليل (لكن بالأساس هو جاهز)
+                        setTimeout(this.enginePlay.bind(this), 500);
+                        return;
+                    }
+                    $('#status').text('المحرك يفكر...');
+                    this.requestSearch({ 'setup': this.getCurrentSetup(), 'go': this.playGoCmd });
+                    this.updateButtons();
+                },
+
+                makeMove(move) {
+                    var move = this.game.move(move);
+                    if (move == null) return null;
+                    this.moveList.splice(this.moveIndex);
+                    this.moveList.push(move);
+                    this.moveIndex++;
+                    this.gameResult = null;
+                    if (this.game.game_over()) {
+                        var reason = null;
+                        var outcome = null;
+                        if (this.game.in_checkmate()) {
+                            outcome = kOutcomeForLoser[this.game.turn()];
+                            reason = 'كش مات';
+                        } else {
+                            outcome = kOutcomeDraw;
+                            reason = 'قاعدة الخمسين حركة';
+                            if (this.game.in_stalemate()) { reason = 'جمود (Stalemate)'; }
+                            if (this.game.in_threefold_repetition()) { reason = 'تكرار الوضعية'; }
+                            if (this.game.insufficient_material()) { reason = 'مواد غير كافية'; }
+                        }
+                        this.gameResult = { outcome: outcome, reason: reason };
+                    }
+                    this.updateButtons();
+                    this.updateStatus();
+                    return move;
+                },
+
+                onSnapEnd() {
+                    this.board.position(this.game.fen());
+                },
+
+                navigateBegin() {
+                    if (this.moveIndex == 0) return;
+                    this.moveIndex = 0;
+                    this.game.reset();
+                    this.board.position(this.game.fen());
+                    this.updateButtons();
+                    this.updateStatus();
+                },
+
+                navigateEnd() {
+                    if (this.moveIndex == this.moveList.length) return;
+                    while (this.moveIndex < this.moveList.length) {
+                        var move = this.moveList[this.moveIndex++];
+                        this.game.move(move);
+                    }
+                    this.board.position(this.game.fen());
+                    this.updateButtons();
+                    this.updateStatus();
+                },
+
+                navigateBack() {
+                    if (this.moveIndex == 0) return;
+                    var move = this.moveList[--this.moveIndex];
+                    this.game.undo();
+                    this.board.position(this.game.fen());
+                    this.updateButtons();
+                    this.updateStatus();
+                },
+
+                navigateForward() {
+                    if (this.moveIndex == this.moveList.length) return;
+                    var move = this.moveList[this.moveIndex++];
+                    this.game.move(move);
+                    this.board.position(this.game.fen());
+                    this.updateButtons();
+                    this.updateStatus();
+                },
+
+                loadPgn() {
+                    var files = $('#pgnToLoad')[0].files;
+                    if (!files || files.length == 0) return;
+                    var pgnToLoad = files[0];
+                    if (!pgnToLoad) return;
+                    var fileReader = new FileReader();
+                    fileReader.onload = this.readPgn.bind(this);
+                    fileReader.readAsText(pgnToLoad, 'UTF-8');
+                },
+
+                readPgn(evt) {
+                    var pgn = evt.target.result;
+                    if (!pgn) return;
+                    var pgnGame = new Chess();
+                    var loaded = pgnGame.load_pgn(pgn, { sloppy: true });
+                    if (!loaded) return;
+                    this.board.start(true);
+                    pgnGame.header([]);
+                    this.game.reset();
+                    this.moveList = [];
+                    var history = pgnGame.history({ verbose: true });
+                    for (var i = 0; i < history.length; i++) this.moveList.push(history[i]);
+                    this.moveIndex = 0;
+                    this.gameResult = null;
+                    var match = pgn.match(kRegexResult);
+                    if (match) {
+                        const outcome = kOutcomeForMnemo[match[1]];
+                        if (outcome) this.gameResult = { outcome: outcome };
+                    }
+                    this.updateButtons();
+                    this.updateStatus();
+                },
+
+                engineError(e) {
+                    this.showError('خطأ في المحرك: ' + e.message + ' (السطر ' + e.lineno + ')');
+                },
+
+                showError(message) {
+                    $('#error-content').text(message);
+                    $('#error').show();
+                },
+
+                hideError() {
+                    $('#error').hide();
+                    $('#error-content').empty();
+                }
+            };
+            return Controller;
+        }();
+
+        $(document).ready(function() {
+            new Controller();
+        });
+
+        function preventBehavior(e) {
+            e.preventDefault();
+        }
+        document.addEventListener('touchmove', preventBehavior, { passive: false });
+    </script>
 </body>
 </html>
